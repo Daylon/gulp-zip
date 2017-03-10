@@ -25,25 +25,33 @@ module.exports = ( filename, opts ) => {
 		archives[ name ] = { id: archivesCount++, zip, name }
 		return archives[ name ] // we return the zip instance
 	}
-	, zipItOut = function( name = '', file = {} ){
-		let newArchive = ( contents ) => new GUTIL.File({
-				cwd: file.cwd,
-				base: file.base,
-				path: PATH.join(file.base, filename),
-				contents
+	, zipItOut = function( _that, name = '' ){
+		let pName
+		, pBuffer
+		, pAll
+		, writeInPipe = ( name, contents ) => new GUTIL.File({
+				cwd: masterPath
+				, base: name
+				, path: PATH.join(name, masterPath)
+				, contents
 			}
 		)
-
-		GET_STREAM
-			.buffer( archives[ name ].zip.outputStream )
-			.then( function( contents ){
-				if( true ){
-					this.push( newArchive( contents ) )
-				}
-			})
-			.catch( err => { throw new GUTIL.PluginError( 'gulp-zip', err ) } )
+		, writeArchive = function( name, contents ){
+			_that.push( writeInPipe( name, contents ) )
+			return contents
+		}
 
 		archives[ name ].zip.end()
+		pName = new Promise( ( resolve, reject ) => resolve( name ) )
+		pBuffer = GET_STREAM.buffer( archives[ name ].zip.outputStream )
+
+		pBuffer
+			.then( writeArchive.bind( null, name ) )
+			.catch( err => { throw new GUTIL.PluginError( 'gulp-zip', err ) } )
+
+		pAll = Promise.all( [ pBuffer, pName ] )
+
+		return pAll
 	}
 	, transformFn = (file, enc, cb) => {
 		// Because Windows...
@@ -51,7 +59,6 @@ module.exports = ( filename, opts ) => {
 		belongsTo = getRadix( pathname )
 
 		if( masterPath.length === 0 ){
-			console.log( file.base )
 			masterPath = file.base
 			hasIgnoredRootFolder = true
 		}
@@ -68,9 +75,9 @@ module.exports = ( filename, opts ) => {
 			}
 		} else {
 			const stat = {
-				compress: opts.compress,
-				mtime: file.stat ? file.stat.mtime : new Date(),
-				mode: file.stat ? file.stat.mode : null
+				compress: opts.compress
+				, mtime: file.stat ? file.stat.mtime : new Date()
+				, mode: file.stat ? file.stat.mode : null
 			}
 
 			if (file.isStream()) {
@@ -85,15 +92,18 @@ module.exports = ( filename, opts ) => {
 	}
 	, flushFn = function( cb ){
 		let names = Object.keys( archives )
+		, promises = []
 		for( let name of names ){
-			zipItOut( name )
+			promises.push( zipItOut( this, name ) )
 		}
-		cb()
+		Promise
+			.all( promises )
+			.then( () => { GUTIL.log(`${promises.length} archives have been zipped out`); cb(); })
 	}
 
 	opts = Object.assign({
-		compress: true,
-		inferFilename: false
+		compress: true
+		, inferFilename: false
 	}, opts)
 
 	if (!filename && opts.inferFilename === true) {
