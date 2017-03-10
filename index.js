@@ -31,8 +31,8 @@ module.exports = ( filename, opts ) => {
 		, pAll
 		, writeInPipe = ( name, contents ) => new GUTIL.File({
 				cwd: masterPath
-				, base: name
-				, path: PATH.join(name, masterPath)
+				, base: masterPath
+				, path: `${masterPath}/${name}.zip`
 				, contents
 			}
 		)
@@ -53,10 +53,12 @@ module.exports = ( filename, opts ) => {
 
 		return pAll
 	}
+	, shorterPath = ( pathname, belongsTo ) => pathname.replace( new RegExp( `${belongsTo}\/`, 'i'), '' )
 	, transformFn = (file, enc, cb) => {
 		// Because Windows...
 		pathname = file.relative.replace(/\\/g, '/')
 		belongsTo = getRadix( pathname )
+		pathname = shorterPath( pathname, belongsTo )
 
 		if( masterPath.length === 0 ){
 			masterPath = file.base
@@ -65,17 +67,12 @@ module.exports = ( filename, opts ) => {
 
 		if( file.isNull() && file.stat && file.stat.isDirectory && file.stat.isDirectory() ){
 			// IS A DIRECTORY
-			if( /\//.test( pathname ) ===false ){ // TODO: is an archive!
+			if( pathname === belongsTo ){ // TODO: is an archive!
 				newArchive( pathname ) // feeds a new instance of ZipFile and set archives[].zip with this instance
-			} else { // this is a regular folder
-				archives[ belongsTo ].zip.addEmptyDirectory(pathname, {
-					mtime: file.stat.mtime || new Date(),
-					mode: file.stat.mode
-				})
 			}
 		} else {
 			const stat = {
-				compress: opts.compress
+				compress: true
 				, mtime: file.stat ? file.stat.mtime : new Date()
 				, mode: file.stat ? file.stat.mode : null
 			}
