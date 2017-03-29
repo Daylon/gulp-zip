@@ -21,8 +21,10 @@ module.exports = ( filename, opts ) => {
 		return radix[ 1 ]
 	}
 	, newArchive = function( name = 'untitled' ){
-		let zip = new YAZL.ZipFile()
-		archives[ name ] = { id: archivesCount++, zip, name }
+		if( !archives[ name ] ){
+			let zip = new YAZL.ZipFile()
+			archives[ name ] = { id: archivesCount++, zip, name }
+		}
 		return archives[ name ] // we return the zip instance
 	}
 	, zipItOut = function( _that, name = '' ){
